@@ -6,10 +6,7 @@ wp_enqueue_script('wp-event-manager-slick-script');
 wp_enqueue_style( 'wp-event-manager-slick-style');
 do_action('set_single_listing_view_count');
 ?>
-<div class="single_event_listing" itemscope
-	itemtype="http://schema.org/Event">
-	<meta itemprop="title"
-		content="<?php echo esc_attr( $post->post_title ); ?>" />
+<div class="single_event_listing" itemscope itemtype="http://schema.org/Event">
 
 	<div class="wpem-main wpem-single-event-page">
 		<?php if ( get_option( 'event_manager_hide_expired_content', 1 ) && 'expired' === $post->post_status ) : ?>
@@ -81,10 +78,10 @@ do_action('set_single_listing_view_count');
 						</div>
 						<div class="wpem-event-details">
 							<div class="wpem-event-title">
-								<h3 class="wpem-heading-text"><?php the_title();?></h3>
+								<h3 class="wpem-heading-text" itemprop="name"><?php the_title();?></h3>
 							</div>
 							<div class="wpem-event-organizer">
-								<div class="wpem-event-organizer-name">
+								<div class="wpem-event-organizer-name" itemprop="performer" content="<?php echo get_organizer_name(); ?>">
 									<?php do_action('single_event_organizer_name_start');?>
 									<?php printf( __('by %s','wp-event-manager'),get_organizer_name() );?>
 									<?php do_action('single_event_organizer_name_end');?>
@@ -114,7 +111,7 @@ do_action('set_single_listing_view_count');
 					<div
 						class="wpem-col-xs-12 wpem-col-sm-7 wpem-col-md-8 wpem-single-event-left-content">
                <?php do_action('single_event_overview_before');?>
-              <div class="wpem-single-event-body-content">
+              <div class="wpem-single-event-body-content" itemprop="description" content="<?php echo apply_filters( 'display_event_description', get_the_content() ); ?>">
                <?php do_action('single_event_overview_start');?>
                	<?php echo apply_filters( 'display_event_description', get_the_content() ); ?>
                <?php do_action('single_event_overview_end');?>
@@ -160,6 +157,7 @@ do_action('set_single_listing_view_count');
 	            <?php if(get_event_end_time()){ display_date_time_separator() ?> <?php display_event_end_time(); } ?>
 	            </span>
             </div>
+			
             <div itemprop="location" itemscope itemtype="http://schema.org/Place">
                   <div class="clearfix">&nbsp;</div>
 				  <h3 class="wpem-heading-text"><?php _e('Location','wp-event-manager');?></h3>
@@ -168,7 +166,7 @@ do_action('set_single_listing_view_count');
               	  </div>
                   <?php if(get_event_venue_name()){ ?>
                   <div class="clearfix">&nbsp;</div>
-				  <h3 class="wpem-heading-text"><?php _e('Venue','wp-event-manager');?></h3>
+				  <h3 class="wpem-heading-text" itemprop="name" content="<?php display_event_venue_name(); ?>"><?php _e('Venue','wp-event-manager');?></h3>
                   <?php  display_event_venue_name(); 
                   } ?> 
             </div>      
