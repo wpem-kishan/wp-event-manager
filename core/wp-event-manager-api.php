@@ -61,8 +61,7 @@ class WP_Event_Manager_API extends WP_REST_Controller{
 	 
 	public function __construct() {
 
-		add_filter('determine_current_user', [$this, 'authenticate'], 10);
-        add_action('rest_api_init', [$this, 'rest_api_init'], 10);
+		add_action('rest_api_init', [$this, 'rest_api_init'], 10);
 	}
 
 	public function rest_api_init()
@@ -77,20 +76,10 @@ class WP_Event_Manager_API extends WP_REST_Controller{
         $this->post($namespace, 'user/event/', $this, 'get_user_event_list');
         $this->post($namespace, 'user/event/add', $this, 'add_event');
         $this->put($namespace, 'user/event/update/(?P<eventid>[0-9]+)/', $this, 'update_event');
+        $this->delete($namespace, 'user/event/delete/(?P<eventid>[0-9]+)/', $this, 'delete_event');
 
         $this->post($namespace, 'event/', $this, 'get_event_list');
-    }
-
-    public function authenticate($userid)
-    {
-        // Do not authenticate twice and check if is a request to our endpoint in the WP REST API.
-        if (!empty($userid))
-        {
-            return $userid;
-        }
-
-
-        return $this->perform_basic_authentication();
+        $this->get($namespace, 'event/(?P<eventid>[0-9]+)/', $this, 'get_single_event');
     }
 
     private function perform_basic_authentication()
@@ -131,56 +120,56 @@ class WP_Event_Manager_API extends WP_REST_Controller{
     public function get($namespace, $route, $class, $method_name)
     {
         register_rest_route(
-                $namespace, $route, array(
-            'methods'             => ['GET'],
-            'callback'            => [$class, $method_name],
-            'permission_callback' => function ()
-            {
-                return $this->perform_basic_authentication();
-            }
-                )
+            $namespace, $route, array(
+                'methods'             => ['GET'],
+                'callback'            => [$class, $method_name],
+                'permission_callback' => function ()
+                {
+                    return $this->perform_basic_authentication();
+                }
+            )
         );
     }
 
     public function post($namespace, $route, $class, $method_name)
     {
         register_rest_route(
-                $namespace, $route, array(
-            'methods'             => ['POST'],
-            'callback'            => [$class, $method_name],
-            'permission_callback' => function ()
-            {
-                return $this->perform_basic_authentication();
-            }
-                )
+            $namespace, $route, array(
+                'methods'             => ['POST'],
+                'callback'            => [$class, $method_name],
+                'permission_callback' => function ()
+                {
+                    return $this->perform_basic_authentication();
+                }
+            )
         );
     }
 
     public function put($namespace, $route, $class, $method_name)
     {
         register_rest_route(
-                $namespace, $route, array(
-            'methods'             => ['PUT'],
-            'callback'            => [$class, $method_name],
-            'permission_callback' => function ()
-            {
-                return $this->perform_basic_authentication();
-            }
-                )
+            $namespace, $route, array(
+                'methods'             => ['PUT'],
+                'callback'            => [$class, $method_name],
+                'permission_callback' => function ()
+                {
+                    return $this->perform_basic_authentication();
+                }
+            )
         );
     }
 
     public function delete($namespace, $route, $class, $method_name)
     {
         register_rest_route(
-                $namespace, $route, array(
-            'methods'             => ['DELETE'],
-            'callback'            => [$class, $method_name],
-            'permission_callback' => function ()
-            {
-                return $this->perform_basic_authentication();
-            }
-                )
+            $namespace, $route, array(
+                'methods'             => ['DELETE'],
+                'callback'            => [$class, $method_name],
+                'permission_callback' => function ()
+                {
+                    return $this->perform_basic_authentication();
+                }
+            )
         );
     }
 
@@ -357,13 +346,11 @@ class WP_Event_Manager_API extends WP_REST_Controller{
 
         	$eventid = wp_insert_post($args);
 
-        	/*
         	$my_event = [
         		'ID'           => $eventid,
       			'post_status'  => 'pending',
         	];
-        	wp_update_post( $my_post );			
-			*/
+        	wp_update_post( $my_event );
 
             if($eventid != '')
             {
@@ -481,7 +468,7 @@ class WP_Event_Manager_API extends WP_REST_Controller{
     	if(!empty($arrData))
     	{
     		$resp['code']     = 'SUCCESS';
-            $resp['message']  = 'Get user event successfully';
+            $resp['message']  = 'Get events successfully';
             $resp['data']     = $arrData;
     	}
     	else
@@ -496,22 +483,23 @@ class WP_Event_Manager_API extends WP_REST_Controller{
 
     public function get_single_event($request)
     {
-    	$eventid = $request->get_header('eventid');
+    	$params = $request->get_params();
+        $eventid = $params['eventid'];
 
     	if($eventid != '')
     	{
-    		$arrData = $this->get_events(10, $paged);
+    		$arrData = $this->get_events('', '', '', $eventid);
 
 	    	if(!empty($arrData))
 	    	{
 	    		$resp['code']     = 'SUCCESS';
-	            $resp['message']  = 'Get User Event Successfully';
+	            $resp['message']  = 'Get event successfully';
 	            $resp['data']     = $arrData;
 	    	}
 	    	else
 	    	{
 	    		$resp['code']     = 'SUCCESS';
-	            $resp['message']  = 'Not Found Any Event!';
+	            $resp['message']  = 'Not found any event!';
 	            $resp['data']     = new stdClass();
 	    	}
     	}
@@ -522,7 +510,33 @@ class WP_Event_Manager_API extends WP_REST_Controller{
             $resp['data']     = new stdClass();
     	}
 
-    	
+        return $resp;
+    }
+
+    public function delete_event($request)
+    {
+        $params = $request->get_params();
+        $eventid = $params['eventid'];
+
+        if($eventid != '')
+        {
+            $my_event = [
+                'ID'           => $eventid,
+                'post_status'  => 'trash',
+            ];
+
+            wp_update_post( $my_event );
+
+            $resp['code']     = 'SUCCESS';
+            $resp['message']  = 'Event delete successfully';
+            $resp['data']     = new stdClass();
+        }
+        else
+        {
+            $resp['code']     = 'FAIL';
+            $resp['message']  = 'Required parameter(s) missing.';
+            $resp['data']     = new stdClass();
+        }
 
         return $resp;
     }
