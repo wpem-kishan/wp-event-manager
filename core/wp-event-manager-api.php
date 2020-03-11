@@ -32,6 +32,27 @@ class WP_Event_Manager_API extends WP_REST_Controller{
     protected $user = null;
 
     /**
+     * Logged in user id.
+     *
+     * @var stdClass
+     */
+    protected $userid = 0;
+
+    /**
+     * Current event id.
+     *
+     * @var stdClass
+     */
+    protected $eventid = 0;
+
+    /**
+     * add new event.
+     *
+     * @var stdClass
+     */
+    protected $add_new_event = 'no';
+
+    /**
      * Current auth method.
      *
      * @var string
@@ -62,6 +83,8 @@ class WP_Event_Manager_API extends WP_REST_Controller{
 	public function __construct() {
 
 		add_action('rest_api_init', [$this, 'rest_api_init'], 10);
+
+        add_filter( 'event_manager_get_listings', [$this, 'get_events_query_filter'], 10, 2);
 	}
 
 	public function rest_api_init()
@@ -72,13 +95,13 @@ class WP_Event_Manager_API extends WP_REST_Controller{
         /**
          * API User
          */
-        $this->post($namespace, 'user/login/', $this, 'login');
+        $this->post_login($namespace, 'user/login/', $this, 'login');
         $this->post($namespace, 'user/event/', $this, 'get_user_event_list');
         $this->post($namespace, 'user/event/add', $this, 'add_event');
         $this->put($namespace, 'user/event/update/(?P<eventid>[0-9]+)/', $this, 'update_event');
         $this->delete($namespace, 'user/event/delete/(?P<eventid>[0-9]+)/', $this, 'delete_event');
 
-        $this->post($namespace, 'event/', $this, 'get_event_list');
+        $this->get($namespace, 'event/', $this, 'get_event_list');
         $this->get($namespace, 'event/(?P<eventid>[0-9]+)/', $this, 'get_single_event');
     }
 
@@ -117,11 +140,37 @@ class WP_Event_Manager_API extends WP_REST_Controller{
         return $this->user;
     }
 
+    private function perform_custom_authentication()
+    {
+        $user_token = $_SERVER['HTTP_AUTHORIZATION'];
+        $userid = $_SERVER['HTTP_USERID'];
+        $get_user_token = get_user_meta($userid, 'user_token', true);
+
+        if($user_token == "Bearer ".$get_user_token)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
     public function get($namespace, $route, $class, $method_name)
     {
         register_rest_route(
             $namespace, $route, array(
                 'methods'             => ['GET'],
+                'callback'            => [$class, $method_name]
+            )
+        );
+    }
+
+    public function post_login($namespace, $route, $class, $method_name)
+    {
+        register_rest_route(
+            $namespace, $route, array(
+                'methods'             => ['POST'],
                 'callback'            => [$class, $method_name],
                 'permission_callback' => function ()
                 {
@@ -139,7 +188,7 @@ class WP_Event_Manager_API extends WP_REST_Controller{
                 'callback'            => [$class, $method_name],
                 'permission_callback' => function ()
                 {
-                    return $this->perform_basic_authentication();
+                    return $this->perform_custom_authentication();
                 }
             )
         );
@@ -153,7 +202,7 @@ class WP_Event_Manager_API extends WP_REST_Controller{
                 'callback'            => [$class, $method_name],
                 'permission_callback' => function ()
                 {
-                    return $this->perform_basic_authentication();
+                    return $this->perform_custom_authentication();
                 }
             )
         );
@@ -167,7 +216,7 @@ class WP_Event_Manager_API extends WP_REST_Controller{
                 'callback'            => [$class, $method_name],
                 'permission_callback' => function ()
                 {
-                    return $this->perform_basic_authentication();
+                    return $this->perform_custom_authentication();
                 }
             )
         );
@@ -188,7 +237,13 @@ class WP_Event_Manager_API extends WP_REST_Controller{
             {
                 if ($user->ID)
                 {
-                    $arrData = get_userdata($user->ID);
+                    $user_data = get_userdata($user->ID);
+                    $user_token = substr(base64_encode(md5( $user_data->data->user_email . time() . $user_data->data->user_pass )), 0, 40);
+                    update_user_meta($user->ID, 'user_token', $user_token);
+
+                    $arrData = [];
+                    $arrData['user'] = $user_data;
+                    $arrData['user_token'] = $user_token;
 
                     $resp['code']     = 'SUCCESS';
                     $resp['message']     = 'Login successfully';
@@ -232,12 +287,14 @@ class WP_Event_Manager_API extends WP_REST_Controller{
 
     public function get_user_event_list($request)
     {
-    	$userid = $request->get_header('userid');
+        $userid = $request->get_header('userid');
+        $posts_per_page = $request->get_header('perpage');
     	$paged = $request->get_header('paged');
+        $params = $request->get_params();
 
     	if ($userid != "")
         {
-        	$arrData = $this->get_events(10, $paged, $userid);
+        	$arrData = $this->get_events($params, $posts_per_page, $paged, $userid);
 
         	$resp['code']     = 'SUCCESS';
             $resp['message']  = 'Get user event successfully';
@@ -253,80 +310,107 @@ class WP_Event_Manager_API extends WP_REST_Controller{
         return $resp;
     }
 
-    public function get_events($posts_per_page = 10, $paged = 1, $userid = 0, $eventid = 0)
+    public function get_events($params = [], $posts_per_page = 10, $paged = 1, $userid = 0, $eventid = 0)
     {
-    	$args = array(
-					'post_type'         => 'event_listing',
-					'post_status'       => array( 'publish', 'expired', 'pending' ),
-					'posts_per_page'    => $posts_per_page,
-					'paged'      		=> $paged,
-					'orderby'           => 'date',
-					'order'             => 'desc'
-				);
+        $this->userid = $userid;
+        $this->eventid = $eventid;
 
-    	if($userid != '' && $userid != 0)
-    	{
-    		$args['author'] = $userid;
-    	}
+        $args = [];
 
-    	if($eventid != '' && $eventid != 0)
-    	{
-    		$args['p'] = $eventid;
-    	}
+        $args['posts_per_page'] = $posts_per_page;
 
-		$events = new WP_Query($args);
+        $args['offset'] = $paged - 1;
+
+        if(!empty($params['search_keywords']))
+        {
+            $args['search_keywords'] = $params['search_keywords'];
+        }
+
+        if(!empty($params['search_location']))
+        {
+            $args['search_location'] = $params['search_location'];
+        }
+
+        if(!empty($params['search_datetimes']))
+        {
+            $args['search_datetimes'][] = $params['search_datetimes'];
+        }
+
+        $events = get_event_listings($args);
 
 		$arrData = [];
 
-		$arrEvent = [];
-		foreach ($events->posts as $key => $event) 
-		{
-			$arrEvent[$key]['eventid'] = $event->ID;
-			$arrEvent[$key]['event_title'] = $event->post_title;
-			$arrEvent[$key]['event_online'] = is_event_online($event);
-			$arrEvent[$key]['event_venue_name'] = get_event_venue_name($event);
-			$arrEvent[$key]['event_address'] = get_event_address($event);
-			$arrEvent[$key]['event_location'] = get_event_location($event);
-			$arrEvent[$key]['event_pincode'] = get_event_pincode($event);
+        if($events->found_posts > 0)
+        {
+            $arrEvent = [];
+            foreach ($events->posts as $key => $event) 
+            {
+                $arrEvent[$key]['eventid'] = $event->ID;
+                $arrEvent[$key]['event_title'] = $event->post_title;
+                $arrEvent[$key]['event_online'] = is_event_online($event);
+                $arrEvent[$key]['event_venue_name'] = get_event_venue_name($event);
+                $arrEvent[$key]['event_address'] = get_event_address($event);
+                $arrEvent[$key]['event_location'] = get_event_location($event);
+                $arrEvent[$key]['event_pincode'] = get_event_pincode($event);
 
-			$registration = get_event_registration_method($event);
-			if($registration->url != '' || $registration->raw_email != '')
-			{
-				$arrEvent[$key]['registration'] = $registration;
-			}
-			else
-			{
-				$arrEvent[$key]['registration'] = new stdClass();
-			}
-			
+                $registration = get_event_registration_method($event);
+                if($registration->url != '' || $registration->raw_email != '')
+                {
+                    $arrEvent[$key]['registration'] = $registration;
+                }
+                else
+                {
+                    $arrEvent[$key]['registration'] = new stdClass();
+                }                
 
-			$arrEvent[$key]['event_banner'] = get_event_banner($event);
-			$arrEvent[$key]['event_description'] = $event->post_content;
-			$arrEvent[$key]['event_start_date'] = get_event_start_date($event);
-			$arrEvent[$key]['event_start_time'] = get_event_start_time($event);
-			$arrEvent[$key]['event_end_date'] = get_event_end_date($event);
-			$arrEvent[$key]['event_end_time'] = get_event_end_time($event);
-			$arrEvent[$key]['event_registration_deadline'] = get_event_registration_end_date($event);
-			$arrEvent[$key]['organizer_name'] = get_organizer_name($event);
-			$arrEvent[$key]['organizer_logo'] = get_organizer_logo($event, 'full');
-			$arrEvent[$key]['organizer_description'] = get_organizer_description($event);
-			$arrEvent[$key]['organizer_email'] = get_event_organizer_email($event);
-			$arrEvent[$key]['organizer_website'] = get_organizer_website($event);
-			$arrEvent[$key]['organizer_twitter'] = get_organizer_twitter($event);
-			$arrEvent[$key]['organizer_youtube'] = get_organizer_youtube($event);
-			$arrEvent[$key]['organizer_facebook'] = get_organizer_facebook($event);
-		}
+                $arrEvent[$key]['event_banner'] = get_event_banner($event);
+                $arrEvent[$key]['event_description'] = $event->post_content;
+                $arrEvent[$key]['event_start_date'] = get_event_start_date($event);
+                $arrEvent[$key]['event_start_time'] = get_event_start_time($event);
+                $arrEvent[$key]['event_end_date'] = get_event_end_date($event);
+                $arrEvent[$key]['event_end_time'] = get_event_end_time($event);
+                $arrEvent[$key]['event_registration_deadline'] = get_event_registration_end_date($event);
+                $arrEvent[$key]['organizer_name'] = get_organizer_name($event);
+                $arrEvent[$key]['organizer_logo'] = get_organizer_logo($event, 'full');
+                $arrEvent[$key]['organizer_description'] = get_organizer_description($event);
+                $arrEvent[$key]['organizer_email'] = get_event_organizer_email($event);
+                $arrEvent[$key]['organizer_website'] = get_organizer_website($event);
+                $arrEvent[$key]['organizer_twitter'] = get_organizer_twitter($event);
+                $arrEvent[$key]['organizer_youtube'] = get_organizer_youtube($event);
+                $arrEvent[$key]['organizer_facebook'] = get_organizer_facebook($event);
+            }
 
-		$arrData['event'] = $arrEvent;
+            $arrData['event'] = $arrEvent;
 
-		if($eventid == '' && $eventid == 0)
-    	{
-    		$arrData['total_event'] = intval($events->found_posts);
-			$arrData['total_page'] = intval($events->max_num_pages);
-			$arrData['current_page'] = intval($paged);
-    	}
+            if($eventid == '' && $eventid == 0)
+            {
+                $arrData['total_event'] = intval($events->found_posts);
+                $arrData['total_page'] = intval($events->max_num_pages);
+                $arrData['current_page'] = intval($paged);
+            }
+        }		
 
 		return $arrData;
+    }
+
+    public function get_events_query_filter($query_args, $args)
+    {
+        if($this->add_new_event == 'yes')
+        {
+            $query_args['post_status'][] = 'pending';
+        }
+
+        if($this->userid != '' && $this->userid != 0)
+        {
+            $query_args['author'] = $this->userid;
+        }
+
+        if($this->eventid != '' && $this->eventid != 0)
+        {
+            $query_args['p'] = $this->eventid;
+        }
+
+        return $query_args;
     }
 
     public function add_event($request)
@@ -339,9 +423,10 @@ class WP_Event_Manager_API extends WP_REST_Controller{
         	$args = [
         		'post_title'     => $params['event_title'],
 				'post_content'   => $params['event_description'],
-				'post_type'      => 'event_listing',				
+				'post_type'      => 'event_listing',
+                'post_author'    => $userid,
 				'comment_status' => 'closed',
-				'post_status'  => 'publish',
+				'post_status'    => 'publish',
         	];
 
         	$eventid = wp_insert_post($args);
@@ -375,7 +460,8 @@ class WP_Event_Manager_API extends WP_REST_Controller{
             	}
             }
 
-            $arrData = $this->get_events('', '', $userid, $eventid);
+            $this->add_new_event = 'yes';
+            $arrData = $this->get_events([], 1, 0, $userid, $eventid);
 
             $resp['code']     = 'SUCCESS';
             $resp['message']  = 'Add event successfully';
@@ -442,7 +528,7 @@ class WP_Event_Manager_API extends WP_REST_Controller{
             	}
             }
 
-            $arrData = $this->get_events('', '', $userid, $eventid);
+            $arrData = $this->get_events([], 1, 0, $userid, $eventid);
 
             $resp['code']     = 'SUCCESS';
             $resp['message']  = 'Update event successfully';
@@ -461,9 +547,11 @@ class WP_Event_Manager_API extends WP_REST_Controller{
 
     public function get_event_list($request)
     {
-    	$paged = $request->get_header('paged');
+    	$posts_per_page = $request->get_header('perpage');
+        $paged = $request->get_header('paged');
+        $params = $request->get_params();
 
-    	$arrData = $this->get_events(10, $paged);
+    	$arrData = $this->get_events($params, $posts_per_page, $paged);
 
     	if(!empty($arrData))
     	{
@@ -488,7 +576,7 @@ class WP_Event_Manager_API extends WP_REST_Controller{
 
     	if($eventid != '')
     	{
-    		$arrData = $this->get_events('', '', '', $eventid);
+    		$arrData = $this->get_events([], '', '', '', $eventid);
 
 	    	if(!empty($arrData))
 	    	{
