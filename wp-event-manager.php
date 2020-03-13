@@ -104,8 +104,10 @@ class WP_Event_Manager {
 		if ( is_admin() ) {
 			include( 'admin/wp-event-manager-admin.php' );
 		}
+
 		//external 
 		include('external/external.php');
+		
 		// Init classes
 		$this->forms      = WP_Event_Manager_Forms::instance();
 		$this->post_types = WP_Event_Manager_Post_Types::instance();
