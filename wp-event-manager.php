@@ -104,8 +104,10 @@ class WP_Event_Manager {
 		if ( is_admin() ) {
 			include( 'admin/wp-event-manager-admin.php' );
 		}
+		
 		//external 
 		include('external/external.php');
+
 		// Init classes
 		$this->forms      = WP_Event_Manager_Forms::instance();
 		$this->post_types = WP_Event_Manager_Post_Types::instance();
@@ -147,9 +149,11 @@ class WP_Event_Manager {
 
 		WP_Event_Manager_Ajax::add_endpoint();
 		unregister_post_type( 'event_listing' );
-		add_filter( 'pre_option_event_manager_enable_types', '__return_true' );
+		add_filter( 'pre_option_event_manager_enable_categories', '__return_true' );
+		add_filter( 'pre_option_event_manager_enable_event_types', '__return_true' );
 		$this->post_types->register_post_types();
-		remove_filter( 'pre_option_event_manager_enable_types', '__return_true' );
+		remove_filter( 'pre_option_event_manager_enable_categories', '__return_true' );
+		remove_filter( 'pre_option_event_manager_enable_event_types', '__return_true' );
 		WP_Event_Manager_Install::install();
 		//show notice after activating plugin
 		update_option('event_manager_rating_showcase_admin_notices_dismiss','0');
@@ -273,7 +277,22 @@ class WP_Event_Manager {
 		
 		) );
 		
-        wp_register_script( 'wp-event-manager-content-event-listing', EVENT_MANAGER_PLUGIN_URL . '/assets/js/content-event-listing.min.js', array('jquery','wp-event-manager-common'), EVENT_MANAGER_VERSION, true );					
+
+		//date rang picker
+		wp_register_style( 'wp-event-manager-date-rang-picker', EVENT_MANAGER_PLUGIN_URL . '/assets/js/daterangepicker/daterangepicker.css');	
+		wp_register_script( 'moment', EVENT_MANAGER_PLUGIN_URL . '/assets/js/daterangepicker/moment.min.js', array('jquery') , EVENT_MANAGER_VERSION, true );
+		wp_register_script( 'wp-event-manager-date-rang-picker', EVENT_MANAGER_PLUGIN_URL . '/assets/js/daterangepicker/daterangepicker.js', array('jquery', 'moment') , EVENT_MANAGER_VERSION, true );
+
+		$dateRang_format = strtoupper(WP_Event_Manager_Date_Time::get_datepicker_format());
+		$dateRang_format = str_replace('YY', 'YYYY', $dateRang_format);
+		wp_localize_script( 'wp-event-manager-date-rang-picker', 'wp_event_manager_date_rang_picker', array(
+			
+		'i18n_daterangpicker_format' => $dateRang_format,
+		
+		) );
+
+
+        wp_register_script( 'wp-event-manager-content-event-listing', EVENT_MANAGER_PLUGIN_URL . '/assets/js/content-event-listing.js', array('jquery','wp-event-manager-common'), EVENT_MANAGER_VERSION, true );					
 
 		//ajax filters js
 		wp_register_script( 'wp-event-manager-ajax-filters', EVENT_MANAGER_PLUGIN_URL . '/assets/js/event-ajax-filters.min.js', $ajax_filter_deps, EVENT_MANAGER_VERSION, true );

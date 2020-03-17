@@ -68,12 +68,12 @@ do_action('set_single_listing_view_count');
 									<div class="wpem-month"><?php echo date_i18n('M',strtotime($end_date));?></div>
 								</div>
 								<?php } ?>
-								<?php else :?>
+							<?php /* else :?>
 								<div class="wpem-from-date">
 									<div class="wpem-date"><?php echo date_i18n('d',strtotime($start_date));?></div>
 									<div class="wpem-month"><?php echo date_i18n('M',strtotime($start_date));?></div>
 								</div>
-        					<?php endif;?>
+        					<?php */ endif;?>
                         </div>
 						</div>
 						<div class="wpem-event-details">
@@ -90,8 +90,8 @@ do_action('set_single_listing_view_count');
 							<?php 
 							$view_count = get_post_views_count($post);
 							if( $view_count ){  ?>
-							<div class="clearfix">&nbsp;</div>
-							<div><i class="wpem-icon-eye"></i> <?php printf(__('%d people viewed this event.','wp-event-manager'),$view_count); ?></div>
+								<div class="clearfix">&nbsp;</div>
+								<div><i class="wpem-icon-eye"></i> <?php printf(__('%d people viewed this event.','wp-event-manager'),$view_count); ?></div>
 							<?php } ?>
 							<?php if(get_event_ticket_price()){ ?>
 								<div class="clearfix">&nbsp;</div>
@@ -126,7 +126,7 @@ do_action('set_single_listing_view_count');
 							<?php
 						$date_format = WP_Event_Manager_Date_Time::get_event_manager_view_date_format ();
 						$registration_end_date = get_event_registration_end_date ();
-						$registration_end_date = WP_Event_Manager_Date_Time::date_parse_from_format ( $date_format, $registration_end_date );
+						/* $registration_end_date = WP_Event_Manager_Date_Time::date_parse_from_format ( $date_format, $registration_end_date ); */
 	
 						$registration_addon_form = apply_filters ( 'event_manager_registration_addon_form', true );
 						$event_timezone = get_event_timezone ();
@@ -151,10 +151,12 @@ do_action('set_single_listing_view_count');
 				    <h3 class="wpem-heading-text"><?php _e('Date And Time','wp-event-manager')?></h3>
             <div class="wpem-event-date-time" >
 	            <span class="wpem-event-date-time-text" itemprop="startDate" content="<?php echo $start_date;?>"><?php display_event_start_date();?> <?php if(get_event_start_time()){ display_date_time_separator(); ?> <?php display_event_start_time(); }?></span>
+	            	<?php if( get_event_end_date() != '' || get_event_end_time() ) {  _e(' to','wp-event-manager'); } ?>
 	            <br/>
 	            <span class="wpem-event-date-time-text" itemprop="endDate" content="<?php echo $end_date;?>">
 	            <?php if( get_event_start_date() != get_event_end_date() ) {  display_event_end_date(); } ?>
-	            <?php if(get_event_end_time()){ display_date_time_separator() ?> <?php display_event_end_time(); } ?>
+	            <?php if( get_event_end_date() != '' && get_event_end_time() ) {  display_date_time_separator(); } ?>
+	            <?php if(get_event_end_time()){  display_event_end_time(); } ?>
 	            </span>
             </div>
 			

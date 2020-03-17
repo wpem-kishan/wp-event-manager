@@ -10,7 +10,7 @@ var ContentEventListing= function () {
         init: function() 
         {   
 	           Common.logInfo("ContentEventListing.init..."); 
-	           jQuery(document).delegate('#load_more_events','click', ContentEventListing.actions.loadMoreEventsClick);
+	           
 			   jQuery(document).delegate('#wpem-event-list-layout','click', ContentEventListing.actions.lineLayoutIconClick);
 			   jQuery(document).delegate('#wpem-event-box-layout','click', ContentEventListing.actions.boxLayoutIconClick);
 			   
@@ -55,7 +55,31 @@ var ContentEventListing= function () {
 		               jQuery(".wpem-event-listings").removeClass("wpem-event-listing-list-view");
 		               jQuery(".wpem-event-listings").addClass("wpem-event-listing-box-view"); 
 		              }
-			   }
+			   	}
+
+			   	if(jQuery( 'input.date_range_picker' ).length > 0)
+		     	{
+		     		var is_aitoupdate = true;
+		     		jQuery('input.date_range_picker').daterangepicker({
+		     			locale: {
+		                	firstDay: 1,
+		                	//format: wp_event_manager_date_rang_picker.i18n_daterangpicker_format,
+		                	format: 'YYYY-MM-DD',
+		                	separator: ' : '
+		              	},
+		              	autoUpdateInput: is_aitoupdate,
+		              	autoApply: true,
+		              	ranges: {
+		                 	'Today': [moment(), moment()],
+		                 	'Nextday': [moment().add(1, 'days'), moment().add(1, 'days')],
+		                 	'This Week': [moment().startOf('week'), moment().endOf('week')],
+		                 	'This Month': [moment().startOf('month'), moment().endOf('month')],
+		                 	'This Year': [moment().startOf('year'), moment().endOf('year')],
+		              	}
+		         	});
+
+		         	is_aitoupdate = true;
+		     	}
         },
         actions: 
         {
